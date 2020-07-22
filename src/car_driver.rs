@@ -1,6 +1,8 @@
 use crate::car::CarComponent;
 
+use crate::playback_driver::CarDriveState;
 use glui::mecs::*;
+use glui::tools::serde_tools::SerdeJsonQuick;
 use glui::tools::*;
 use std::time::Duration;
 
@@ -13,11 +15,12 @@ pub enum Steering {
 
 pub struct CarDriver {
     pub car: Entity,
-    pub cam_entity: Entity,
-    pub view: i32,
     pub braking: bool,
     pub throttling: bool,
     pub steering: Steering,
+    pub state: CarDriveState,
+    pub update_id: usize,
+    pub states: Vec<CarDriveState>,
 }
 
 impl System for CarDriver {
@@ -28,17 +31,17 @@ impl System for CarDriver {
 
         match self.steering {
             Steering::Left => {
-                car.steer = (car.steer - 4.0 * dt).clamp(-1.0, 1.0);
+                car.steer = (car.steer - 2.0 * dt).clamp(-1.0, 1.0);
             }
             Steering::Right => {
-                car.steer = (car.steer + 4.0 * dt).clamp(-1.0, 1.0);
+                car.steer = (car.steer + 2.0 * dt).clamp(-1.0, 1.0);
             }
             Steering::None => {
                 if car.steer < 0.0 {
-                    car.steer = (car.steer + 3.0 * dt).min(0.0);
+                    car.steer = (car.steer + 2.0 * dt).min(0.0);
                 }
                 if car.steer > 0.0 {
-                    car.steer = (car.steer - 3.0 * dt).max(0.0);
+                    car.steer = (car.steer - 2.0 * dt).max(0.0);
                 }
             }
         }
@@ -46,32 +49,19 @@ impl System for CarDriver {
         car.brake = if self.braking { 1.0 } else { 0.0 };
         car.throttle = if self.throttling { 1.0 } else { 0.0 };
 
-        let d = car.velocity.length() / 55.0;
-        let r = car.right3();
+        let new_state = CarDriveState {
+            throttle: car.throttle,
+            steer: car.steer,
+            brake: car.brake,
+            update_id: self.update_id,
+        };
 
-        let mut p = Vec3::new(car.position.x, 0.0, car.position.y);
-        match self.view {
-            0 => {
-                p += Vec3::new(0.0, 5.0, 0.0) - car.dir3() * (10.0 + d * 0.0) + r * 3.0;
-            }
-            1 => {
-                p += Vec3::new(0.0, 2.0, 0.0) + r * 7.0;
-            }
-            2 => {
-                p += Vec3::new(0.0, 17.0, 0.0) - car.dir3() * 0.1;
-            }
-            _ => {}
-        }
-
-        let car_pos = car.pos3();
-
-        let cam = &mut world
-            .component_mut::<DataComponent<Camera>>(self.cam_entity)
-            .unwrap()
-            .data;
-
-        if let Some(_) = cam.controller::<NoController>() {
-            cam.params.look_at(p, car_pos, Vec3::new(0.0, 1.0, 0.0));
+        if self.state != new_state {
+            self.states.push(self.state);
+            self.state = new_state;
+            self.update_id = 0;
+        } else {
+            self.update_id += 1;
         }
     }
     fn window_event(&mut self, event: &GlutinWindowEvent, world: &mut StaticWorld) -> bool {
@@ -97,15 +87,17 @@ impl System for CarDriver {
                     (Steering::None, GlutinKey::D, false) => self.steering = Steering::Left,
                     _ => {}
                 }
-                if key == GlutinKey::T && !press {
-                    self.view = (self.view + 1) % 3;
-                }
                 if key == GlutinKey::R && !press {
                     car.position = Vec2::origin();
                     car.velocity = Vec2::zero();
                     car.acceleration = Vec2::zero();
                     car.heading = 0.0;
                     car.angular_velocity = 0.0;
+                    self.states = vec![];
+                    self.update_id = 0;
+                }
+                if key == GlutinKey::P && !press {
+                    self.states.save_json("path.json").unwrap();
                 }
             }
         }
@@ -115,14 +107,15 @@ impl System for CarDriver {
 }
 
 impl CarDriver {
-    pub fn new(car: Entity, camera: Entity) -> CarDriver {
+    pub fn new(car: Entity) -> CarDriver {
         CarDriver {
             car,
-            cam_entity: camera,
-            view: 0,
             braking: false,
             throttling: false,
             steering: Steering::None,
+            state: Default::default(),
+            update_id: 0,
+            states: vec![],
         }
     }
 }

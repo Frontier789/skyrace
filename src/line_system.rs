@@ -3,7 +3,6 @@ use glui::mecs::{DrawComponent, Entity, Message};
 use glui::mecs::{StaticWorld, System};
 use glui::tools::{Buffer, DrawMode, Vec3, Vec4, VertexArray};
 use std::collections::HashMap;
-use std::time::Duration;
 
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]

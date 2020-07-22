@@ -20,6 +20,11 @@ impl System for CarSystem {
             let mut car_clone = None;
 
             if let Some(car) = world.component_mut::<CarComponent>(*body_entity) {
+                // println!(
+                //     "throttle: {}, brake: {}, steer: {}",
+                //     car.throttle, car.brake, car.steer
+                // );
+
                 // init config
                 let cfg = &car.config;
                 let inertia = cfg.mass * cfg.inertia_ratio;
@@ -27,6 +32,7 @@ impl System for CarSystem {
                 let axle_weight_ratio_front = cfg.cg_to_rear_axle / wheel_base;
                 let axle_weight_ratio_rear = cfg.cg_to_front_axle / wheel_base;
                 let steer_angle = cfg.max_steer * car.steer;
+                let steer_angle = steer_angle / (1.0 + car.speed() / 40.0);
 
                 // local base
                 let dir = car.dir();
@@ -54,6 +60,7 @@ impl System for CarSystem {
                     - vel_long.signum() * steer_angle;
                 let mut slip_angle_rear = (vel_lat + vel_from_angular_rear).atan2(vel_long.abs());
 
+                // print!("{}, {} -> ", slip_angle_front, slip_angle_rear);
                 if slip_angle_front > PI / 2.0 {
                     slip_angle_front = PI - slip_angle_front;
                 }
@@ -66,6 +73,7 @@ impl System for CarSystem {
                 if slip_angle_rear < -PI / 2.0 {
                     slip_angle_rear = -PI - slip_angle_rear;
                 }
+                // println!("{}, {}", slip_angle_front, slip_angle_rear);
 
                 let tire_grip_front = cfg.tire_grip;
                 let tire_grip_rear = cfg.tire_grip; // todo add support for hand break
@@ -93,9 +101,6 @@ impl System for CarSystem {
                 let f_tot_long = f_drag_long - steer_angle.sin() * f_friction_front + f_traction;
                 let f_tot_lat = f_drag_lat + steer_angle.cos() * f_friction_front + f_friction_rear;
 
-                car.front_susp.apply_force(axle_weight_front, dt, cfg.mass);
-                car.rear_susp.apply_force(axle_weight_rear, dt, cfg.mass);
-
                 // local acceleration
                 let a_long = f_tot_long / cfg.mass;
                 let a_lat = f_tot_lat / cfg.mass;
@@ -103,25 +108,40 @@ impl System for CarSystem {
                 // acceleration in world coordinates
                 let a = a_long * dir + a_lat * right;
 
-                car.acceleration = a;
-                car.velocity += a * dt;
+                car.front_susp.apply_force(axle_weight_front, dt, cfg.mass);
+                car.rear_susp.apply_force(axle_weight_rear, dt, cfg.mass);
 
-                // rotational forces
-                let mut body_torque =
-                    f_friction_front * cfg.cg_to_front_axle - f_friction_rear * cfg.cg_to_rear_axle;
+                if car.speed() < 6.0 {
+                    car.angular_velocity = car.speed() / cfg.wheel_base() * steer_angle.sin();
 
-                if car.speed() < 0.4 && car.throttle == 0.0 {
-                    car.velocity = Vec2::zero();
-                    body_torque = 0.0;
-                    car.angular_velocity = 0.0;
+                    let a = (f_drag_long + f_traction) / cfg.mass;
+
+                    car.acceleration = a * dir;
+                    car.velocity = (car.speed() + a * dt) * dir;
+
+                    if car.velocity.sgn().dot(dir) < -0.8 {
+                        car.velocity = Vec2::zero();
+                        car.acceleration = Vec2::zero();
+                    }
+
+                    car.heading += car.angular_velocity * dt;
+
+                    car.position += car.velocity * dt;
+                } else {
+                    car.acceleration = a;
+                    car.velocity += car.acceleration * dt;
+
+                    // rotational forces
+                    let body_torque = f_friction_front * cfg.cg_to_front_axle
+                        - f_friction_rear * cfg.cg_to_rear_axle;
+
+                    let angular_acceleration = body_torque / inertia;
+
+                    car.angular_velocity += angular_acceleration * dt;
+                    car.heading += car.angular_velocity * dt;
+
+                    car.position += car.velocity * dt;
                 }
-
-                let angular_acceleration = body_torque / inertia;
-
-                car.angular_velocity += angular_acceleration * dt;
-                car.heading += car.angular_velocity * dt;
-
-                car.position += car.velocity * dt;
 
                 car.wheel_roll += car.speed() / cfg.wheel_radius * dt;
 
@@ -340,7 +360,7 @@ impl CarSystem {
             self.create_wheel(world),
             self.create_wheel(world),
         ];
-        world.add_component(e, CarComponent::new(wheels));
+        world.add_component(e, CarComponent::new_stiff(wheels));
         e
     }
 }
@@ -435,7 +455,7 @@ pub struct CarComponent {
 }
 
 impl CarComponent {
-    fn new(wheels: [Entity; 4]) -> Self {
+    pub fn new_loose(wheels: [Entity; 4]) -> Self {
         CarComponent {
             config: CarConfig {
                 gravity: 10.0,
@@ -449,13 +469,13 @@ impl CarComponent {
                 cg_height: 0.55,
                 wheel_radius: 0.45,
                 wheel_width: 0.15,
-                tire_grip: 2.0,
+                tire_grip: 1.0,
                 lock_grip: 0.7,
                 engine_force: 8000.0,
                 brake_force: 12000.0,
                 hand_break_force: 12000.0 / 2.5,
                 weight_transfer: 0.2,
-                max_steer: 0.5,
+                max_steer: 0.8,
                 corner_stiffness_front: 5.0,
                 corner_stiffness_rear: 5.2,
                 air_resistance: 2.5,
@@ -470,8 +490,50 @@ impl CarComponent {
             steer: 0.0,
             throttle: 0.0,
             brake: 0.0,
-            front_susp: Suspension::new(0.0, 2500.0, 52000.0),
-            rear_susp: Suspension::new(0.05, 2200.0, 44000.0),
+            front_susp: Suspension::new(0.0, 2500.0, 42000.0),
+            rear_susp: Suspension::new(0.05, 2200.0, 34000.0),
+            wheels,
+            wheel_roll: 0.0,
+        }
+    }
+
+    fn new_stiff(wheels: [Entity; 4]) -> Self {
+        CarComponent {
+            config: CarConfig {
+                gravity: 10.0,
+                mass: 1500.0,
+                inertia_ratio: 0.3,
+                width: 1.6,
+                cg_to_front: 2.0,
+                cg_to_rear: 2.0,
+                cg_to_front_axle: 1.25,
+                cg_to_rear_axle: 1.25,
+                cg_height: 0.55,
+                wheel_radius: 0.45,
+                wheel_width: 0.15,
+                tire_grip: 5.0,
+                lock_grip: 0.7,
+                engine_force: 8000.0,
+                brake_force: 12000.0,
+                hand_break_force: 12000.0 / 2.5,
+                weight_transfer: 0.2,
+                max_steer: 0.35,
+                corner_stiffness_front: 10.0,
+                corner_stiffness_rear: 10.2,
+                air_resistance: 2.5,
+                roll_resistance: 10.0,
+                body_height: 1.4,
+            },
+            heading: 0.0,
+            position: Vec2::zero(),
+            velocity: Vec2::zero(),
+            acceleration: Vec2::zero(),
+            angular_velocity: 0.0,
+            steer: 0.0,
+            throttle: 0.0,
+            brake: 0.0,
+            front_susp: Suspension::new(0.0, 2500.0, 42000.0),
+            rear_susp: Suspension::new(0.05, 2200.0, 34000.0),
             wheels,
             wheel_roll: 0.0,
         }
