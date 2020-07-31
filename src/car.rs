@@ -455,6 +455,7 @@ pub struct CarComponent {
 }
 
 impl CarComponent {
+    #[allow(dead_code)]
     pub fn new_loose(wheels: [Entity; 4]) -> Self {
         CarComponent {
             config: CarConfig {

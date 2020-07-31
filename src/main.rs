@@ -2,7 +2,9 @@
 
 mod camera_on_car;
 mod playback_driver;
+mod spline;
 mod spline_editor;
+mod track;
 
 mod car;
 mod car_driver;
