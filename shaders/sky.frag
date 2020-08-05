@@ -32,7 +32,7 @@ float optical_depth(float cos_angle, float height) {
 
 const vec3 camera_position = vec3(0, 10, 0);   // The camera's current position
 const float camera_height = length(camera_position);
-uniform vec3 L;
+uniform vec3 light_direction;
 uniform float time;
 
 in vec3 ray_direction;
@@ -77,7 +77,7 @@ void main() {
     for (int k = 0;k < samples;++k) {
         float sample_height = length(smaple_point);
         float sample_height_depth = optical_depth_height(sample_height);
-        float sample_light_angle = dot(L, smaple_point) / sample_height;
+        float sample_light_angle = dot(light_direction, smaple_point) / sample_height;
         float sample_light_depth = optical_depth_angle(sample_light_angle);
         float sample_ray_angle = dot(ray_dir, smaple_point) / sample_height;
         float sample_ray_depth = optical_depth_angle(sample_ray_angle);
@@ -93,7 +93,7 @@ void main() {
     vec3 mie_color = color * mie_coef * sun_intensity;
     vec3 rayleigh_color = color * (inv4lambda * rayleigh_coef * sun_intensity);
 
-    float ray_light_angle_cos = dot(L, ray_dir);
+    float ray_light_angle_cos = dot(light_direction, ray_dir);
     float g2 = mie_shape*mie_shape;
     float mie_phase = 1.5 * ((1.0 - g2) / (2.0 + g2)) * (1.0 + ray_light_angle_cos*ray_light_angle_cos) / pow(1.0 + g2 - 2.0*mie_shape*ray_light_angle_cos,1.5);
     float rayleigh_phase = 1 + ray_light_angle_cos*ray_light_angle_cos;

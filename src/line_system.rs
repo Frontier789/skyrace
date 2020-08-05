@@ -33,14 +33,11 @@ impl LineSystem {
         let pts = Buffer::new();
         let col = Buffer::new();
 
-        render_seq.add_command(RenderCommand {
+        render_seq.add_command(RenderCommand::new(
             vao,
-            mode: DrawMode::Lines,
-            shader: DrawShaderSelector::Colored,
-            uniforms: vec![],
-            transparent: false,
-            instances: 1,
-        });
+            DrawMode::Lines,
+            DrawShaderSelector::Colored,
+        ));
 
         let e = world.entity();
         world.add_component(e, DrawComponent::from_render_seq(render_seq));

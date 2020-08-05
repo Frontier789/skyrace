@@ -116,7 +116,7 @@ impl CamFollowCar {
         let r = car.right3();
         match self.view {
             View::Racer => {
-                p += Vec3::new(0.0, 3.0, 0.0) - car.dir3() * 10.0;
+                p += Vec3::new(0.0, 5.0, 0.0) - car.dir3() * 10.0;
             }
             View::Side => {
                 p += Vec3::new(0.0, 2.0, 0.0) + r * 7.0;

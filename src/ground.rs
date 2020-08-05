@@ -43,17 +43,15 @@ impl Ground {
         render_seq.add_buffer(cbuf.into_base_type());
         render_seq.add_buffer(tbuf.into_base_type());
 
-        render_seq.add_command(RenderCommand {
+        render_seq.add_command(RenderCommand::new_uniforms(
             vao,
-            mode: DrawMode::TriangleFan,
-            shader: DrawShaderSelector::Textured,
-            uniforms: vec![
+            DrawMode::TriangleFan,
+            DrawShaderSelector::Textured,
+            vec![
                 Uniform::from("tex", &tex),
                 Uniform::from("uv_matrix", Mat4::identity()),
             ],
-            transparent: false,
-            instances: 1,
-        });
+        ));
 
         let e = world.entity();
         world.add_component(

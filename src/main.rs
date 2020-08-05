@@ -2,8 +2,7 @@
 
 mod camera_on_car;
 mod playback_driver;
-mod spline;
-mod spline_editor;
+mod sun_mover;
 mod track;
 
 mod car;
@@ -24,6 +23,8 @@ use crate::gui::Gui;
 use crate::line_system::LineSystem;
 use crate::playback_driver::{CarDriveState, PlaybackDriver};
 use crate::sky::Sky;
+use crate::sun_mover::SunMover;
+use crate::track::Track;
 use glui::mecs::World;
 use glui::mecs::*;
 use glui::tools::serde_tools::SerdeJsonQuick;
@@ -34,21 +35,27 @@ fn main() {
 
     let ds = DrawSystem::new(&mut w, NoController {});
     let camera_entity = ds.camera_entity;
+    ds.camera_mut(w.as_static_mut()).params.zfar = 6000.0;
 
     w.add_system(ds);
 
     let carsys = CarSystem::new();
     let linesys = LineSystem::new(w.as_static_mut());
     let ground = Ground::new(w.as_static_mut());
+    w.add_system(ground);
 
     if let Ok(path) = Vec::<CarDriveState>::load_json("path.json") {
-        let car = carsys.create_car(w.as_static_mut());
+        let car = carsys.create_car(w.as_static_mut(), (0.0, Vec2::zero()));
         let driver = PlaybackDriver::new(car, path);
         w.add_system(driver);
     }
 
-    let car = carsys.create_car(w.as_static_mut());
-    w.component_mut::<CarComponent>(car).unwrap().position = Vec2::new(0.0, 2.0);
+    let sun_dir = Vec3::new(-1.0, 0.3, -1.0).sgn();
+
+    let track = Track::new(w.as_static_mut()).unwrap();
+
+    let car_state = <(f32, Vec2)>::load_json("car_state.json").unwrap_or_default();
+    let car = carsys.create_car(w.as_static_mut(), car_state);
     let driver = CarDriver::new(car);
     w.add_system(driver);
 
@@ -56,12 +63,15 @@ fn main() {
     w.add_system(follower);
     w.add_gui(Gui::from_car(car));
 
-    w.add_system(ground);
+    let sky = Sky::new(sun_dir, &mut w);
+
+    w.add_system(sky);
+    w.add_system(track);
     w.add_system(linesys);
     w.add_system(carsys);
 
-    let sky = Sky::new(Vec3::new(1.0, 0.3, 1.0).sgn(), &mut w);
-    w.add_system(sky);
+    let sun_dir_setter = SunMover::new();
+    w.add_system(sun_dir_setter);
 
     w.run();
 
@@ -71,4 +81,8 @@ fn main() {
         .data;
 
     cam.params.spatial.save_json("cam.json").unwrap();
+
+    let car = &mut w.component_mut::<CarComponent>(car).unwrap();
+
+    car.spatial_state().save_json("car_state.json").unwrap();
 }

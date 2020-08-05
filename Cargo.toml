@@ -11,3 +11,4 @@ glui = { path = "../glui", features = ["serializable"] }
 glui_proc = { path = "../glui_proc" }
 serde = {version = "*", features = ["derive"]}
 serde_json = "*"
+notify = "4.0.15"

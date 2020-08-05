@@ -15,20 +15,19 @@ pub struct Sky {
 
 impl System for Sky {
     fn receive(&mut self, msg: &Box<dyn Message>, world: &mut StaticWorld) {
-        if let Some(SetSunDir(d)) = msg.downcast_ref() {
-            world.with_component_mut(self.draw_entity, |c: &mut DrawComponent| {
-                c.render_seq.command_mut(0).uniforms[0] = Uniform::Vector3("L".to_owned(), *d);
-            });
-        }
+        // if let Some(SetSunDir(d)) = msg.downcast_ref() {
+        //     world.with_component_mut(self.draw_entity, |c: &mut DrawComponent| {
+        //         c.render_seq.command_mut(0).uniforms[0] = Uniform::from("light_direction", *d);
+        //     });
+        // }
         if let Some(SetMieK(k)) = msg.downcast_ref() {
             world.with_component_mut(self.draw_entity, |c: &mut DrawComponent| {
-                c.render_seq.command_mut(0).uniforms[1] = Uniform::Float("mie_coef".to_owned(), *k);
+                c.render_seq.command_mut(0).uniforms[1] = Uniform::from("mie_coef", *k);
             });
         }
         if let Some(SetRayleighK(k)) = msg.downcast_ref() {
             world.with_component_mut(self.draw_entity, |c: &mut DrawComponent| {
-                c.render_seq.command_mut(0).uniforms[2] =
-                    Uniform::Float("rayleigh_coef".to_owned(), *k);
+                c.render_seq.command_mut(0).uniforms[2] = Uniform::from("rayleigh_coef", *k);
             });
         }
     }
@@ -43,9 +42,9 @@ impl Sky {
                 .unwrap()
                 .into(),
             vec![
-                Uniform::Vector3("L".to_owned(), sun_dir),
-                Uniform::Float("mie_coef".to_owned(), 0.01),
-                Uniform::Float("rayleigh_coef".to_owned(), 0.0045),
+                Uniform::from("light_direction", sun_dir),
+                Uniform::from("mie_coef", 0.006),
+                Uniform::from("rayleigh_coef", 0.0035),
             ],
         );
 
