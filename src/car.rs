@@ -1,13 +1,20 @@
+extern crate assimp;
+
+use self::assimp::{aiImportFileToMesh, aiImportFileToMeshes};
 use crate::line_system::{LineSystem, LinesUpdate, SetLine};
-use glui::graphics::DrawShaderSelector;
+use glui::graphics::{DrawShaderSelector, RenderSequence};
 use glui::mecs::{Component, DrawComponent, Entity, StaticWorld, System};
 use glui::tools::mesh::{Mesh, MeshOnGPU};
-use glui::tools::{Mat4, Uniform, Vec2, Vec3};
+use glui::tools::{Mat4, Uniform, Vec2, Vec3, Vec4};
 use std::f32::consts::PI;
 use std::time::Duration;
 
+struct CarBody {
+    meshes: Vec<MeshOnGPU>,
+}
+
 pub struct CarSystem {
-    body_mesh: MeshOnGPU,
+    body_mesh: CarBody,
     wheel_mesh: MeshOnGPU,
 }
 
@@ -111,7 +118,7 @@ impl System for CarSystem {
                 car.front_susp.apply_force(axle_weight_front, dt, cfg.mass);
                 car.rear_susp.apply_force(axle_weight_rear, dt, cfg.mass);
 
-                if car.speed() < 6.0 {
+                if car.speed() < 14.0 {
                     car.angular_velocity = car.speed() / cfg.wheel_base() * steer_angle.sin();
 
                     let a = (f_drag_long + f_traction) / cfg.mass;
@@ -167,11 +174,13 @@ impl System for CarSystem {
                     * Mat4::scale3(car.config.body_size() / 2.0)
                     * Mat4::offset(Vec3::new(0.0, 1.0, 0.0));
 
-                for (x, y, i) in [
-                    (-1.0, -1.0, 0),
-                    (-1.0, 1.0, 1),
-                    (1.0, 1.0, 2),
-                    (1.0, -1.0, 3),
+                let wheel_dist = car.config.body_size().z / 2.0 - car.config.wheel_width;
+
+                for (x, z, i) in [
+                    (car.config.cg_to_rear_axle, -wheel_dist, 0),
+                    (car.config.cg_to_rear_axle, wheel_dist, 1),
+                    (-car.config.cg_to_front_axle, wheel_dist, 2),
+                    (-car.config.cg_to_front_axle, -wheel_dist, 3),
                 ]
                 .iter()
                 .copied()
@@ -180,15 +189,15 @@ impl System for CarSystem {
                         .component_mut::<DrawComponent>(car.wheels[i as usize])
                         .unwrap();
 
-                    let angle = if y == 1.0 { car.wheel_turn() } else { 0.0 };
+                    let angle = if i == 0 || i == 1 {
+                        car.wheel_turn()
+                    } else {
+                        0.0
+                    } + if i == 1 || i == 2 { PI } else { 0.0 };
 
                     wheel_draw.model_matrix = Mat4::offset(car.pos3())
                         * Mat4::rotate_y(-car.heading)
-                        * Mat4::offset(Vec3::new(
-                            car.config.wheel_base() / 2.0 * y,
-                            0.0,
-                            (car.config.body_size().z / 2.0 + car.config.wheel_width) * x,
-                        ))
+                        * Mat4::offset(Vec3::new(x, 0.0, z))
                         * Mat4::rotate_y(-angle)
                         * Mat4::scale3(Vec3::new(
                             car.config.wheel_radius,
@@ -205,38 +214,96 @@ impl System for CarSystem {
 
 impl CarSystem {
     pub fn new() -> CarSystem {
-        let body = Mesh::unit_cube().upload_to_gpu();
-        let wheel = Mesh::unit_cylinder(9).upload_to_gpu();
-
         CarSystem {
-            body_mesh: body,
-            wheel_mesh: wheel,
+            body_mesh: Self::load_body(),
+            wheel_mesh: Self::load_wheel(),
+        }
+    }
+
+    fn load_wheel() -> MeshOnGPU {
+        match aiImportFileToMesh("models/wheel_boarded.obj") {
+            Some(mesh) => mesh,
+            None => Mesh::unit_cylinder(9),
+        }
+        .upload_to_gpu()
+    }
+    fn load_body() -> CarBody {
+        match aiImportFileToMeshes("models/body_low.obj") {
+            Some(meshes) => {
+                let mut aabb = meshes[0].aabb();
+                for i in 1..meshes.len() {
+                    aabb = meshes[i].extend_aabb(aabb);
+                }
+                CarBody {
+                    meshes: meshes
+                        .into_iter()
+                        .map(|m| m.fit_into_aabb_into_unit_cube(aabb).upload_to_gpu())
+                        .collect(),
+                }
+            }
+            None => CarBody {
+                meshes: vec![Mesh::unit_cube().upload_to_gpu()],
+            },
         }
     }
 
     fn create_wheel(&self, world: &mut StaticWorld) -> Entity {
         world.new_entity_with_component(DrawComponent::from_render_seq(
             self.wheel_mesh.non_owning_render_seq(
-                DrawShaderSelector::DiffusePhong,
-                vec![Uniform::from(
-                    "light_direction",
-                    Vec3::new(1.0, 0.3, 1.0).sgn(),
-                )],
+                DrawShaderSelector::Phong,
+                vec![
+                    Uniform::from("light_direction", Vec3::new(1.0, 0.3, 1.0).sgn()),
+                    Uniform::from("Kd", Vec3::grey(0.23)),
+                    Uniform::from("Ka", Vec3::grey(0.1)),
+                    Uniform::from("Ks", Vec3::grey(0.2)),
+                    Uniform::from("Ns", 9.0),
+                ],
             ),
         ))
+    }
+    fn all_body_render_seq(&self) -> RenderSequence {
+        let mut rs = RenderSequence::new();
+        let shader = DrawShaderSelector::Phong;
+        let colors = vec![
+            Vec4::new(0.0235, 0.5294, 0.4431, 1.0),
+            Vec4::new(0.0314, 0.0314, 0.5333, 1.0),
+            Vec4::new(0.6039, 0.7255, 0.8980, 1.0),
+            Vec4::new(0.8784, 0.3373, 0.3373, 1.0),
+            Vec4::new(0.5529, 0.0275, 0.2275, 1.0),
+            Vec4::new(0.0000, 0.0000, 0.0000, 1.0),
+            Vec4::new(0.3333, 0.1098, 0.6941, 1.0),
+            Vec4::new(0.6039, 0.8431, 0.8980, 1.0),
+        ];
+        let ns = vec![
+            9.0,   // handle
+            300.0, // body
+            30.0,  // mirrors
+            30.0,  // brand
+            9.0,   // grid
+            9.0,   // front_lamp
+            9.0,   // back_lamp
+            50.0,  // exhaust
+        ];
+
+        for i in 0..self.body_mesh.meshes.len() {
+            let c = colors[i].rgb();
+            let uniforms = vec![
+                Uniform::from("light_direction", Vec3::new(1.0, 0.3, 1.0).sgn()),
+                Uniform::from("Ka", c / 4.0),
+                Uniform::from("Kd", c),
+                Uniform::from("Ks", c * 0.3),
+                Uniform::from("Ns", ns[i]),
+            ];
+            rs.add_command(self.body_mesh.meshes[i].as_render_command(shader.clone(), uniforms));
+        }
+        rs
     }
 
     pub fn create_car(&self, world: &mut StaticWorld, init_state: (f32, Vec2)) -> Entity {
         let e = world.entity();
         world.add_component(
             e,
-            DrawComponent::from_render_seq(self.body_mesh.non_owning_render_seq(
-                DrawShaderSelector::DiffusePhong,
-                vec![Uniform::from(
-                    "light_direction",
-                    Vec3::new(1.0, 0.3, 1.0).sgn(),
-                )],
-            )),
+            DrawComponent::from_render_seq(self.all_body_render_seq()),
         );
         let wheels = [
             self.create_wheel(world),
@@ -339,60 +406,18 @@ pub struct CarComponent {
 }
 
 impl CarComponent {
-    #[allow(dead_code)]
-    pub fn new_loose(wheels: [Entity; 4]) -> Self {
-        CarComponent {
-            config: CarConfig {
-                gravity: 10.0,
-                mass: 1500.0,
-                inertia_ratio: 1.0,
-                width: 1.6,
-                cg_to_front: 2.0,
-                cg_to_rear: 2.0,
-                cg_to_front_axle: 1.25,
-                cg_to_rear_axle: 1.25,
-                cg_height: 0.55,
-                wheel_radius: 0.45,
-                wheel_width: 0.15,
-                tire_grip: 1.0,
-                lock_grip: 0.7,
-                engine_force: 8000.0,
-                brake_force: 12000.0,
-                hand_break_force: 12000.0 / 2.5,
-                weight_transfer: 0.2,
-                max_steer: 0.8,
-                corner_stiffness_front: 5.0,
-                corner_stiffness_rear: 5.2,
-                air_resistance: 2.5,
-                roll_resistance: 10.0,
-                body_height: 1.4,
-            },
-            heading: 0.0,
-            position: Vec2::zero(),
-            velocity: Vec2::zero(),
-            acceleration: Vec2::zero(),
-            angular_velocity: 0.0,
-            steer: 0.0,
-            throttle: 0.0,
-            brake: 0.0,
-            front_susp: Suspension::new(0.0, 2500.0, 42000.0),
-            rear_susp: Suspension::new(0.05, 2200.0, 34000.0),
-            wheels,
-            wheel_roll: 0.0,
-        }
-    }
-
     fn new_stiff(wheels: [Entity; 4], init_state: (f32, Vec2)) -> Self {
+        let scale = 1.4;
         CarComponent {
             config: CarConfig {
                 gravity: 10.0,
                 mass: 1500.0,
                 inertia_ratio: 0.3,
-                width: 1.6,
-                cg_to_front: 2.0,
-                cg_to_rear: 2.0,
-                cg_to_front_axle: 1.25,
-                cg_to_rear_axle: 1.25,
+                width: 1.8 * scale,
+                cg_to_front: 2.04 * scale,
+                cg_to_rear: 2.04 * scale,
+                cg_to_front_axle: 1.13 * scale,
+                cg_to_rear_axle: 1.29 * scale,
                 cg_height: 0.55,
                 wheel_radius: 0.45,
                 wheel_width: 0.15,
@@ -402,12 +427,12 @@ impl CarComponent {
                 brake_force: 12000.0,
                 hand_break_force: 12000.0 / 2.5,
                 weight_transfer: 0.2,
-                max_steer: 0.35,
-                corner_stiffness_front: 10.0,
-                corner_stiffness_rear: 10.2,
+                max_steer: 0.5,
+                corner_stiffness_front: 14.0,
+                corner_stiffness_rear: 14.2,
                 air_resistance: 2.5,
                 roll_resistance: 10.0,
-                body_height: 1.4,
+                body_height: 1.0 * scale,
             },
             heading: init_state.0,
             position: init_state.1,

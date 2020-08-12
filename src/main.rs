@@ -59,7 +59,7 @@ fn main() {
     let driver = CarDriver::new(car);
     w.add_system(driver);
 
-    let follower = CamFollowCar::new(car, camera_entity, true, w.as_static_mut());
+    let follower = CamFollowCar::new(car, camera_entity, false, w.as_static_mut());
     w.add_system(follower);
     w.add_gui(Gui::from_car(car));
 

@@ -100,7 +100,7 @@ impl GuiBuilder for Gui {
 
         self.speed = car.speed();
         self.throttle = car.throttle;
-        self.steer = car.steer;
+        self.steer = car.wheel_turn();
     }
 }
 

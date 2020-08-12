@@ -48,11 +48,11 @@ impl System for CamFollowCar {
             let cam_p = cam.params.spatial.pos;
             let delta = p - cam_p;
             let d = delta.length();
-            let step = (23.0 + d * 0.4 + d * d * 0.15).min(self.max_cam_speed) * dt;
+            let step = (33.0 + d * 0.4 + d * d * 0.3).min(self.max_cam_speed) * dt;
 
-            self.max_cam_speed += 46.0 * dt;
+            self.max_cam_speed += 10000.0f32.max(self.max_cam_speed * 10.0).min(1000.0) * dt;
 
-            let new_pos = if d < step {
+            let new_pos = if d < step || d < 0.001 {
                 p
             } else {
                 let dir = delta.sgn();

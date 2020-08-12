@@ -119,3 +119,9 @@ impl CarDriver {
         }
     }
 }
+
+impl Drop for CarDriver {
+    fn drop(&mut self) {
+        self.states.save_json("last_path.json").unwrap();
+    }
+}
