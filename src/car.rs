@@ -1,7 +1,10 @@
 extern crate assimp;
+extern crate rand;
 
 use self::assimp::{aiImportFileToMesh, aiImportFileToMeshes};
-use crate::line_system::{LineSystem, LinesUpdate, SetLine};
+#[allow(deprecated)]
+use self::rand::distributions::{Distribution, Normal};
+// use crate::line_system::{DelLine, LineDesc, LineSystem, LinesUpdate, SetLine};
 use glui::graphics::{DrawShaderSelector, RenderSequence};
 use glui::mecs::{Component, DrawComponent, Entity, StaticWorld, System};
 use glui::tools::mesh::{Mesh, MeshOnGPU};
@@ -22,11 +25,13 @@ impl System for CarSystem {
     fn update(&mut self, delta_time: Duration, world: &mut StaticWorld) {
         let dt = delta_time.as_secs_f32();
 
-        for body_entity in world.entities().iter() {
-            let msgs: Vec<SetLine> = vec![];
+        let car_entities = world.entities_having_component::<CarComponent>();
+
+        for i in 0..car_entities.len() {
+            let body_entity = car_entities[i];
             let mut car_clone = None;
 
-            if let Some(car) = world.component_mut::<CarComponent>(*body_entity) {
+            if let Some(car) = world.component_mut::<CarComponent>(body_entity) {
                 // println!(
                 //     "throttle: {}, brake: {}, steer: {}",
                 //     car.throttle, car.brake, car.steer
@@ -39,7 +44,7 @@ impl System for CarSystem {
                 let axle_weight_ratio_front = cfg.cg_to_rear_axle / wheel_base;
                 let axle_weight_ratio_rear = cfg.cg_to_front_axle / wheel_base;
                 let steer_angle = cfg.max_steer * car.steer;
-                let steer_angle = steer_angle / (1.0 + car.speed() / 40.0);
+                let steer_angle = steer_angle / (1.0 + car.speed() / 60.0);
 
                 // local base
                 let dir = car.dir();
@@ -152,21 +157,103 @@ impl System for CarSystem {
 
                 car.wheel_roll += car.speed() / cfg.wheel_radius * dt;
 
+                car.terrain_height = 0.0;
+
                 car_clone = Some(car.clone());
             }
+            //
+            // let bs1 = car_clone.unwrap().config.body_size();
+            // let p1 = car_clone.unwrap().position;
+            // let d1 = car_clone.unwrap().dir() * bs1.x / 2.0;
+            // let r1 = car_clone.unwrap().right() * bs1.z / 2.0;
+            //
+            // world.send_by_type::<LineSystem, _>(SetLine(
+            //     format!("bound_line {:?},0", i),
+            //     LineDesc {
+            //         color: Vec4::RED,
+            //         a: Vec3::from_vec2(p1 + d1 + r1, 2.0).xzy(),
+            //         b: Vec3::from_vec2(p1 + d1 - r1, 2.0).xzy(),
+            //     },
+            // ));
+            // world.send_by_type::<LineSystem, _>(SetLine(
+            //     format!("bound_line {:?},1", i),
+            //     LineDesc {
+            //         color: Vec4::RED,
+            //         a: Vec3::from_vec2(p1 + d1 - r1, 2.0).xzy(),
+            //         b: Vec3::from_vec2(p1 - d1 - r1, 2.0).xzy(),
+            //     },
+            // ));
+            // world.send_by_type::<LineSystem, _>(SetLine(
+            //     format!("bound_line {:?},2", i),
+            //     LineDesc {
+            //         color: Vec4::RED,
+            //         a: Vec3::from_vec2(p1 - d1 - r1, 2.0).xzy(),
+            //         b: Vec3::from_vec2(p1 - d1 + r1, 2.0).xzy(),
+            //     },
+            // ));
+            // world.send_by_type::<LineSystem, _>(SetLine(
+            //     format!("bound_line {:?},3", i),
+            //     LineDesc {
+            //         color: Vec4::RED,
+            //         a: Vec3::from_vec2(p1 - d1 + r1, 2.0).xzy(),
+            //         b: Vec3::from_vec2(p1 + d1 + r1, 2.0).xzy(),
+            //     },
+            // ));
 
+            // collision update
+            // for j in i + 1..car_entities.len() {
+            //     let car = world
+            //         .component_mut::<CarComponent>(car_entities[j])
+            //         .unwrap();
+            //     let bs2 = car.config.body_size();
+            //     let p2 = car.position;
+            //     let d2 = car.dir() * bs2.x / 2.0;
+            //     let r2 = car.right() * bs2.z / 2.0;
+            //
+            //     for (cx, cy) in [(1.0, 1.0), (-1.0, 1.0), (1.0, -1.0), (-1.0, -1.0)].iter() {
+            //         for (o, corner, p, d, r, k) in [
+            //             (p1, p1 + *cx * d1 + *cy * r1, p2, d2, r2, 0),
+            //             (p2, p2 + *cx * d2 + *cy * r2, p1, d1, r1, 1),
+            //         ]
+            //         .iter()
+            //         {
+            //             if let Some(n) = point_in_rect(*corner, *o - *corner, *p, *d, *r) {
+            //                 if let Some(car) = world.component_mut::<CarComponent>(car_entities[j])
+            //                 {
+            //                     car.position += n / 2.0;
+            //                 }
+            //                 if let Some(car) = world.component_mut::<CarComponent>(car_entities[i])
+            //                 {
+            //                     car.position -= n / 2.0;
+            //                 }
+            //                 world.send_by_type::<LineSystem, _>(SetLine(
+            //                     format!("coll_line {:?},{:?},{}", (cx, cy), (i, j), k),
+            //                     LineDesc {
+            //                         color: Vec4::GREEN,
+            //                         a: Vec3::from_vec2(*corner, 2.0).xzy(),
+            //                         b: Vec3::from_vec2(*corner + n, 2.0).xzy(),
+            //                     },
+            //                 ));
+            //             } else {
+            //                 world.send_by_type::<LineSystem, _>(DelLine(format!(
+            //                     "coll_line {:?},{:?},{}",
+            //                     (cx, cy),
+            //                     (i, j),
+            //                     k
+            //                 )));
+            //             }
+            //         }
+            //     }
+            // }
+
+            // draw update
             if let Some(car) = car_clone {
-                for msg in msgs {
-                    world.send_by_type::<LineSystem, _>(msg);
-                }
-                world.send_by_type::<LineSystem, _>(LinesUpdate {});
-
                 let car_h =
                     (car.front_susp.length + car.rear_susp.length) / 2.0 + car.config.wheel_radius;
                 let car_pitch =
                     (car.front_susp.length - car.rear_susp.length).atan2(car.config.wheel_base());
 
-                let body_draw = world.component_mut::<DrawComponent>(*body_entity).unwrap();
+                let body_draw = world.component_mut::<DrawComponent>(body_entity).unwrap();
 
                 body_draw.model_matrix = Mat4::offset(car.pos3() + Vec3::new(0.0, car_h, 0.0))
                     * Mat4::rotate_y(-car.heading)
@@ -189,7 +276,7 @@ impl System for CarSystem {
                         .component_mut::<DrawComponent>(car.wheels[i as usize])
                         .unwrap();
 
-                    let angle = if i == 0 || i == 1 {
+                    let turn_angle = if i == 0 || i == 1 {
                         car.wheel_turn()
                     } else {
                         0.0
@@ -198,7 +285,7 @@ impl System for CarSystem {
                     wheel_draw.model_matrix = Mat4::offset(car.pos3())
                         * Mat4::rotate_y(-car.heading)
                         * Mat4::offset(Vec3::new(x, 0.0, z))
-                        * Mat4::rotate_y(-angle)
+                        * Mat4::rotate_y(-turn_angle)
                         * Mat4::scale3(Vec3::new(
                             car.config.wheel_radius,
                             car.config.wheel_radius,
@@ -209,8 +296,37 @@ impl System for CarSystem {
                 }
             }
         }
+        // world.send_by_type::<LineSystem, _>(LinesUpdate {});
     }
 }
+//
+// fn point_in_rect(p: Vec2, _po: Vec2, o: Vec2, d: Vec2, r: Vec2) -> Option<Vec2> {
+//     let x = (p - o).dot(d.sgn()) / d.length();
+//     let y = (p - o).dot(r.sgn()) / r.length();
+//
+//     if x.abs().max(y.abs()) <= 1.0 {
+//         let proj0 = 1.0 * d + y * r + o - p;
+//         let proj1 = -1.0 * d + y * r + o - p;
+//         let proj2 = x * d + 1.0 * r + o - p;
+//         let proj3 = x * d - 1.0 * r + o - p;
+//         let c0 = proj0.length();
+//         let c1 = proj1.length();
+//         let c2 = proj2.length();
+//         let c3 = proj3.length();
+//         let cm = c0.min(c1.min(c2.min(c3)));
+//         Some(if c0 == cm {
+//             proj0
+//         } else if c1 == cm {
+//             proj1
+//         } else if c2 == cm {
+//             proj2
+//         } else {
+//             proj3
+//         })
+//     } else {
+//         None
+//     }
+// }
 
 impl CarSystem {
     pub fn new() -> CarSystem {
@@ -261,17 +377,18 @@ impl CarSystem {
             ),
         ))
     }
-    fn all_body_render_seq(&self) -> RenderSequence {
+    fn all_body_render_seq(&self, primary_color: Vec4) -> RenderSequence {
         let mut rs = RenderSequence::new();
         let shader = DrawShaderSelector::Phong;
+        let secondary_color = primary_color.yzxw();
         let colors = vec![
-            Vec4::new(0.0235, 0.5294, 0.4431, 1.0),
-            Vec4::new(0.0314, 0.0314, 0.5333, 1.0),
+            primary_color * 0.8 + secondary_color, // Vec4::new(0.0235, 0.5294, 0.4431, 1.0),
+            primary_color,                         // Vec4::new(0.0314, 0.0314, 0.5333, 1.0),
             Vec4::new(0.6039, 0.7255, 0.8980, 1.0),
-            Vec4::new(0.8784, 0.3373, 0.3373, 1.0),
-            Vec4::new(0.5529, 0.0275, 0.2275, 1.0),
+            Vec4::WHITE - (primary_color + secondary_color) * 1.4, // Vec4::new(0.8784, 0.3373, 0.3373, 1.0),
+            Vec4::WHITE - (primary_color * 2.0 + secondary_color * 0.6), // Vec4::new(0.5529, 0.0275, 0.2275, 1.0),
             Vec4::new(0.0000, 0.0000, 0.0000, 1.0),
-            Vec4::new(0.3333, 0.1098, 0.6941, 1.0),
+            primary_color * 0.7 + Vec4::WHITE * 0.3, // Vec4::new(0.3333, 0.1098, 0.6941, 1.0),
             Vec4::new(0.6039, 0.8431, 0.8980, 1.0),
         ];
         let ns = vec![
@@ -299,11 +416,17 @@ impl CarSystem {
         rs
     }
 
-    pub fn create_car(&self, world: &mut StaticWorld, init_state: (f32, Vec2)) -> Entity {
+    pub fn create_car(
+        &self,
+        world: &mut StaticWorld,
+        init_state: (f32, Vec2),
+        color: Vec4,
+        randomness: f32,
+    ) -> Entity {
         let e = world.entity();
         world.add_component(
             e,
-            DrawComponent::from_render_seq(self.all_body_render_seq()),
+            DrawComponent::from_render_seq(self.all_body_render_seq(color)),
         );
         let wheels = [
             self.create_wheel(world),
@@ -311,7 +434,7 @@ impl CarSystem {
             self.create_wheel(world),
             self.create_wheel(world),
         ];
-        world.add_component(e, CarComponent::new_stiff(wheels, init_state));
+        world.add_component(e, CarComponent::new_stiff(wheels, init_state, randomness));
         e
     }
 }
@@ -391,6 +514,7 @@ pub struct CarComponent {
     pub config: CarConfig,
     pub heading: f32,          // direction of car (rad)
     pub position: Vec2,        // world coordinates
+    pub terrain_height: f32,   // height of the terrain below the car
     pub velocity: Vec2,        // world coordinates
     pub acceleration: Vec2,    // world coordinates
     pub angular_velocity: f32, // rad/s
@@ -406,36 +530,43 @@ pub struct CarComponent {
 }
 
 impl CarComponent {
-    fn new_stiff(wheels: [Entity; 4], init_state: (f32, Vec2)) -> Self {
-        let scale = 1.4;
+    fn new_stiff(wheels: [Entity; 4], init_state: (f32, Vec2), randomness: f32) -> Self {
+        let mut rng = rand::thread_rng();
+        let mut rngs = rand::thread_rng();
+        let normal = Normal::new(1.0, randomness as f64);
+        let normals = Normal::new(1.0, randomness as f64 * 0.1);
+        let mut rnd = || normal.sample(&mut rng) as f32;
+        let mut rnds = || normals.sample(&mut rngs) as f32;
+        let scale = 1.4 * rnds();
         CarComponent {
             config: CarConfig {
-                gravity: 10.0,
-                mass: 1500.0,
-                inertia_ratio: 0.3,
+                gravity: 10.0 * rnds(),
+                mass: 1500.0 * rnd(),
+                inertia_ratio: 0.3 * rnds(),
                 width: 1.8 * scale,
                 cg_to_front: 2.04 * scale,
                 cg_to_rear: 2.04 * scale,
                 cg_to_front_axle: 1.13 * scale,
                 cg_to_rear_axle: 1.29 * scale,
-                cg_height: 0.55,
-                wheel_radius: 0.45,
-                wheel_width: 0.15,
-                tire_grip: 5.0,
-                lock_grip: 0.7,
-                engine_force: 8000.0,
-                brake_force: 12000.0,
-                hand_break_force: 12000.0 / 2.5,
-                weight_transfer: 0.2,
-                max_steer: 0.5,
-                corner_stiffness_front: 14.0,
-                corner_stiffness_rear: 14.2,
-                air_resistance: 2.5,
-                roll_resistance: 10.0,
+                cg_height: 0.55 * rnd(),
+                wheel_radius: 0.45 * rnds(),
+                wheel_width: 0.15 * rnds(),
+                tire_grip: 5.0 * rnd(),
+                lock_grip: 0.7 * rnd(),
+                engine_force: 8000.0 * rnd(),
+                brake_force: 12000.0 * rnd(),
+                hand_break_force: 12000.0 / 2.5 * rnd(),
+                weight_transfer: 0.2 * rnd(),
+                max_steer: 0.7 * rnd(),
+                corner_stiffness_front: 14.0 * rnd(),
+                corner_stiffness_rear: 14.2 * rnd(),
+                air_resistance: 2.5 * rnd(),
+                roll_resistance: 10.0 * rnd(),
                 body_height: 1.0 * scale,
             },
             heading: init_state.0,
             position: init_state.1,
+            terrain_height: 0.0,
             velocity: Vec2::zero(),
             acceleration: Vec2::zero(),
             angular_velocity: 0.0,
@@ -449,6 +580,7 @@ impl CarComponent {
         }
     }
 
+    #[allow(dead_code)]
     pub fn spatial_state(&self) -> (f32, Vec2) {
         (self.heading, self.position)
     }
@@ -476,7 +608,7 @@ impl CarComponent {
     }
 
     pub fn pos3(&self) -> Vec3 {
-        Vec3::new(self.position.x, 0.0, self.position.y)
+        Vec3::new(self.position.x, self.terrain_height, self.position.y)
     }
 
     pub fn wheel_turn(&self) -> f32 {

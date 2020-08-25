@@ -13,3 +13,7 @@ assimp = { path = "../assimp" }
 serde = {version = "*", features = ["derive"]}
 serde_json = "*"
 notify = "4.0.15"
+noise = "*"
+rand = "*"
+rand_distr = "*"
+rand_xorshift = "*"

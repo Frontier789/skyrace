@@ -17,6 +17,7 @@ pub struct CarDriver {
     pub car: Entity,
     pub braking: bool,
     pub throttling: bool,
+    pub nitro: bool,
     pub steering: Steering,
     pub state: CarDriveState,
     pub update_id: usize,
@@ -48,6 +49,7 @@ impl System for CarDriver {
 
         car.brake = if self.braking { 1.0 } else { 0.0 };
         car.throttle = if self.throttling { 1.0 } else { 0.0 };
+        car.throttle += if self.nitro { 3.0 } else { 0.0 };
 
         let new_state = CarDriveState {
             throttle: car.throttle,
@@ -73,6 +75,9 @@ impl System for CarDriver {
                 if key == GlutinKey::W {
                     self.throttling = press;
                 }
+                if key == GlutinKey::K {
+                    self.nitro = press;
+                }
                 if key == GlutinKey::S {
                     self.braking = press;
                 }
@@ -96,6 +101,9 @@ impl System for CarDriver {
                     self.states = vec![];
                     self.update_id = 0;
                 }
+                if key == GlutinKey::M && !press {
+                    println!("State: ({},{:?})", car.heading, car.position);
+                }
                 if key == GlutinKey::P && !press {
                     self.states.save_json("path.json").unwrap();
                 }
@@ -115,6 +123,7 @@ impl CarDriver {
             steering: Steering::None,
             state: Default::default(),
             update_id: 0,
+            nitro: false,
             states: vec![],
         }
     }

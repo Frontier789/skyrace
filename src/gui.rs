@@ -2,11 +2,12 @@ use crate::car::CarComponent;
 use crate::track::{ShowWireframe, Track};
 use glui::gui::{
     gui_primitives, Align, Button, ButtonBckg, FontSize, GridLayout, GuiBuilder, GuiDimension,
-    Overlay, SkipCell, Text,
+    Image, Overlay, SkipCell, Text,
 };
 use glui::mecs::{Entity, StaticWorld};
 use glui::tools::Vec4;
 use std::collections::HashMap;
+use std::f32::consts::PI;
 use std::time::Duration;
 
 #[derive(Clone, PartialEq, Debug)]
@@ -40,16 +41,8 @@ impl GuiBuilder for Gui {
             ..Default::default()
         } << {
             -GridLayout {
-                row_heights: vec![
-                    GuiDimension::Units(400.0),
-                    GuiDimension::Default,
-                    GuiDimension::Units(200.0),
-                ],
-                col_widths: vec![
-                    GuiDimension::Units(150.0),
-                    GuiDimension::Default,
-                    GuiDimension::Units(200.0),
-                ],
+                row_heights: vec![GuiDimension::Units(400.0), GuiDimension::Default],
+                col_widths: vec![GuiDimension::Units(150.0), GuiDimension::Default],
                 ..Default::default()
             } << {
                 gui_primitives::build_table_proto(
@@ -68,9 +61,24 @@ impl GuiBuilder for Gui {
                         ..Default::default()
                     },
                 );
-                // for _ in 0..7 {
-                //     -SkipCell {};
-                // }
+                -SkipCell {};
+                -GridLayout {
+                    row_heights: vec![GuiDimension::Default, GuiDimension::Units(200.0)],
+                    col_widths: vec![GuiDimension::Units(200.0)],
+                    ..Default::default()
+                } << {
+                    -SkipCell {};
+                    -Image {
+                        name: "images/speed_meter.png".to_owned(),
+                        ..Default::default()
+                    } << {
+                        -Image {
+                            name: "images/speed_arrow.png".to_owned(),
+                            rotation: self.speed * 3.6 / 360.0 * PI * 2.0 - 5.0 / 6.0 * PI,
+                            ..Default::default()
+                        };
+                    };
+                };
             };
             -Overlay::from(Vec4::grey(0.4)) << {
                 -GridLayout {

@@ -11,21 +11,13 @@ use glui::tools::{
 
 use self::notify::DebouncedEvent;
 use self::notify::DebouncedEvent::NoticeWrite;
+use crate::utilities::watch;
 use glui::tools::serde_tools::{SerdeError, SerdeJsonQuick};
 use glui::tools::texture::TextureFiltering;
 use glui::tools::texture_2d::ImageError;
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use std::sync::mpsc::{channel, Receiver};
+use notify::RecommendedWatcher;
+use std::sync::mpsc::Receiver;
 use std::time::Duration;
-
-fn watch(path: &str) -> notify::Result<(RecommendedWatcher, Receiver<DebouncedEvent>)> {
-    let (tx, rx) = channel();
-    let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_secs_f32(0.2))?;
-
-    watcher.watch(path, RecursiveMode::Recursive)?;
-
-    Ok((watcher, rx))
-}
 
 #[derive(Clone, Debug, Message)]
 pub struct ShowWireframe(pub bool);
@@ -103,7 +95,7 @@ impl Track {
         let mut track = Track {
             track_entity: world.entity(),
             shader: DrawShader::from_files("shaders/track.vert", "shaders/track.frag")?,
-            channel: watch("shaders/track.frag")?,
+            channel: watch(vec!["shaders/track.frag"])?,
             textures: (diffuse, normal, roughness),
         };
         track.generate(world)?;
@@ -118,17 +110,23 @@ impl Track {
 
         pts
     }
-    fn generate(&mut self, world: &mut StaticWorld) -> Result<(), SerdeError> {
-        let mut pts = vec![];
-        let mut tpts = vec![];
-        let mut tang = vec![];
+    pub fn track_curve_control_points() -> Result<Vec<Vec2>, SerdeError> {
         let data_f32 = Vec::<f32>::load_json("race_track.json")?;
         let mut data = Vec::with_capacity(data_f32.len() / 2);
         for i in 0..data_f32.len() / 2 {
             data.push(Vec2::new(data_f32[i * 2 + 0], data_f32[i * 2 + 1]));
         }
-        let data = Self::fix_curves(data);
-        let track_width = 3.6 * 8.0;
+        Ok(Self::fix_curves(data))
+    }
+    pub fn track_width() -> f32 {
+        3.6 * 8.0
+    }
+    fn generate(&mut self, world: &mut StaticWorld) -> Result<(), SerdeError> {
+        let mut pts = vec![];
+        let mut tpts = vec![];
+        let mut tang = vec![];
+        let track_width = Self::track_width();
+        let data = Self::track_curve_control_points()?;
         let mut i = 0;
         let mut last_p = Vec2::zero();
         let mut curve_len = 0.0;
@@ -139,16 +137,8 @@ impl Track {
             let p2 = data[i + 2];
             let p3 = data[i + 3];
 
-            for t in (0.0..1.0).linspace(30) {
-                let p = (1.0 - t) * (1.0 - t) * (1.0 - t) * p0
-                    + 3.0 * t * (1.0 - t) * (1.0 - t) * p1
-                    + 3.0 * t * t * (1.0 - t) * p2
-                    + t * t * t * p3;
-                let v = -3.0 * (1.0 - t) * (1.0 - t) * p0
-                    + 3.0 * (3.0 * t * t - 4.0 * t + 1.0) * p1
-                    + 3.0 * (2.0 - 3.0 * t) * t * p2
-                    + 3.0 * t * t * p3;
-                let n = v.perp().sgn();
+            for t in (0.0..1.0).linspace(20) {
+                let (p, _v, n) = Vec2::eval_bezier4(p0, p1, p2, p3, t);
 
                 if i > 0 || t > 0.0 {
                     curve_len += (last_p - p).length();

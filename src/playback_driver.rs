@@ -48,6 +48,7 @@ impl System for PlaybackDriver {
 }
 
 impl PlaybackDriver {
+    #[allow(dead_code)]
     pub fn new(car: Entity, mut state_queue: Vec<CarDriveState>) -> PlaybackDriver {
         state_queue.reverse();
 

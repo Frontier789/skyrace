@@ -39,7 +39,7 @@ impl Sky {
 
         let render_seq = mesh.as_render_seq(
             DrawShader::from_files("shaders/sky.vert", "shaders/sky.frag")
-                .unwrap()
+                .expect("Failed t load sky shaders!")
                 .into(),
             vec![
                 Uniform::from("light_direction", sun_dir),

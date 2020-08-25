@@ -17,6 +17,8 @@ pub struct LinesUpdate {}
 
 #[derive(Debug, Clone, Message)]
 pub struct SetLine(pub String, pub LineDesc);
+#[derive(Debug, Clone, Message)]
+pub struct DelLine(pub String);
 
 pub struct LineSystem {
     lines: HashMap<String, LineDesc>,
@@ -55,6 +57,9 @@ impl System for LineSystem {
     fn receive(&mut self, msg: &Box<dyn Message>, world: &mut StaticWorld) {
         if let Some(line) = msg.downcast_ref::<SetLine>() {
             self.lines.insert(line.0.clone(), line.1);
+        }
+        if let Some(line) = msg.downcast_ref::<DelLine>() {
+            self.lines.remove(&line.0);
         }
         if let Some(_) = msg.downcast_ref::<LinesUpdate>() {
             if self.lines.is_empty() {

@@ -21,11 +21,11 @@ impl System for SunMover {
             * if world.is_key_pressed(GlutinKey::O) {
                 2.0
             } else {
-                0.002
+                0.02
             };
         let t = self.time;
 
-        let dir = Vec3::pol(1.0, (t.sin() + 1.0) / 2.0 * 0.6, t - PI / 2.0).xzy();
+        let dir = Vec3::pol(1.0, (t.sin() + 1.0) / 2.0 * 0.6 + 0.2, t - PI / 2.0).xzy();
 
         for (_e, comp) in world.entities_with_component_mut::<DrawComponent>() {
             for cmd in comp.render_seq.command_iter_mut() {
