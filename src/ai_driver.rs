@@ -42,7 +42,8 @@ impl System for AiDriver {
         let v = target - car.position;
         let d = car.dir();
 
-        car.steer = v.sgn().dot(d.perp()) * self.target.steer_coef;
+        let steer = v.sgn().dot(d.perp()) * self.target.steer_coef;
+        car.steer = (steer - car.steer).max(-0.1).min(0.1) + car.steer;
         car.brake = 0.0;
         car.throttle = car.speed().smoothstep(46.0, 48.0) * -0.5 + 1.0;
 

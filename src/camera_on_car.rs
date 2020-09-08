@@ -23,7 +23,8 @@ impl View {
 }
 
 pub struct CamFollowCar {
-    car: Entity,
+    cars: Vec<Entity>,
+    active_car: usize,
     cam_entity: Entity,
     view: View,
     free_view: bool,
@@ -36,7 +37,9 @@ impl System for CamFollowCar {
 
         if !self.free_view {
             let p = self.cam_should_be_pos(world);
-            let car = world.component_mut::<CarComponent>(self.car).unwrap();
+            let car = world
+                .component_mut::<CarComponent>(self.cars[self.active_car])
+                .unwrap();
 
             let car_pos = car.pos3();
 
@@ -50,8 +53,6 @@ impl System for CamFollowCar {
             let d = delta.length();
             let step = (33.0 + d * 0.4 + d * d * 0.3).min(self.max_cam_speed) * dt;
 
-            self.max_cam_speed += 10000.0f32.max(self.max_cam_speed * 10.0).min(1000.0) * dt;
-
             let new_pos = if d < step || d < 0.001 {
                 p
             } else {
@@ -60,9 +61,19 @@ impl System for CamFollowCar {
             };
 
             let t = cam.params.spatial.target;
+            let delta = car_pos - t;
+            let d = delta.length();
+            let new_target = if d < step || d < 0.001 {
+                car_pos
+            } else {
+                let dir = delta.sgn();
+                t + dir * step
+            };
+
+            self.max_cam_speed += 10000.0f32.max(self.max_cam_speed * 3.0).min(100.0) * dt;
 
             cam.params
-                .look_at(new_pos, t * 0.6 + car_pos * 0.4, Vec3::new(0.0, 1.0, 0.0));
+                .look_at(new_pos, new_target, Vec3::new(0.0, 1.0, 0.0));
         }
     }
     fn window_event(&mut self, event: &GlutinWindowEvent, world: &mut StaticWorld) -> bool {
@@ -101,6 +112,14 @@ impl System for CamFollowCar {
                     }
                     self.max_cam_speed = 0.0;
                 }
+                if key == GlutinKey::LBracket && !press {
+                    self.active_car = (self.active_car + 1) % self.cars.len();
+                    self.max_cam_speed = 0.0;
+                }
+                if key == GlutinKey::RBracket && !press {
+                    self.active_car = (self.active_car + self.cars.len() - 1) % self.cars.len();
+                    self.max_cam_speed = 0.0;
+                }
             }
         }
 
@@ -110,7 +129,9 @@ impl System for CamFollowCar {
 
 impl CamFollowCar {
     fn cam_should_be_pos(&self, world: &mut StaticWorld) -> Vec3 {
-        let car = world.component_mut::<CarComponent>(self.car).unwrap();
+        let car = world
+            .component_mut::<CarComponent>(self.cars[self.active_car])
+            .unwrap();
 
         let mut p = car.pos3();
         let r = car.right3();
@@ -129,7 +150,9 @@ impl CamFollowCar {
         p
     }
     fn init_cam(&self, world: &mut StaticWorld) {
-        let car = world.component_mut::<CarComponent>(self.car).unwrap();
+        let car = world
+            .component_mut::<CarComponent>(self.cars[self.active_car])
+            .unwrap();
 
         let car_p = car.pos3();
         let p = self.cam_should_be_pos(world) + Vec3::new(0.0, 5.0, 0.0);
@@ -151,13 +174,14 @@ impl CamFollowCar {
         }
     }
     pub fn new(
-        car: Entity,
+        cars: Vec<Entity>,
         camera: Entity,
         free_view: bool,
         world: &mut StaticWorld,
     ) -> CamFollowCar {
         let me = CamFollowCar {
-            car,
+            cars,
+            active_car: 0,
             cam_entity: camera,
             view: View::Racer,
             free_view,

@@ -101,9 +101,9 @@ impl System for CarDriver {
                     self.states = vec![];
                     self.update_id = 0;
                 }
-                if key == GlutinKey::M && !press {
-                    println!("State: ({},{:?})", car.heading, car.position);
-                }
+                // if key == GlutinKey::M && !press {
+                //     println!("State: ({},{:?})", car.heading, car.position);
+                // }
                 if key == GlutinKey::P && !press {
                     self.states.save_json("path.json").unwrap();
                 }

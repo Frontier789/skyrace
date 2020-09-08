@@ -4,10 +4,12 @@ mod ai_driver;
 mod cacti;
 mod camera_on_car;
 mod playback_driver;
+mod sounds;
 mod sun_mover;
 mod terrain;
 mod track;
 mod utilities;
+mod wheel_mark;
 
 mod car;
 mod car_driver;
@@ -34,15 +36,21 @@ use glui::mecs::World;
 use glui::mecs::*;
 // use glui::tools::serde_tools::SerdeJsonQuick;
 use crate::cacti::Cacti;
+use crate::sounds::Sounds;
+use crate::wheel_mark::WheelMark;
 use glui::tools::*;
 use rand::distributions::{Distribution, Uniform};
 use std::env;
 
 fn main() {
     let mut follow_ai = true;
+    let mut muted = false;
     for arg in env::args() {
         if arg == "-race" {
             follow_ai = !follow_ai;
+        }
+        if arg == "-mute" {
+            muted = !muted;
         }
     }
 
@@ -73,6 +81,26 @@ fn main() {
 
     let track = Track::new(w.as_static_mut()).expect("Failed to init track!");
 
+    let mut cars = vec![];
+
+    if !follow_ai {
+        let state = (
+            -5.39,
+            Vec2::new(473.0, 184.0) * 0.8 + Vec2::new(-0.77907276, 0.6269335) * (2.2 * 1.5 - 1.0)
+                - Vec2::new(0.6269335, 0.77907276) * 9.0 * 2.0,
+        );
+        let car = carsys.create_car(
+            w.as_static_mut(),
+            state,
+            Vec4::new(0.5333, 0.2014, 0.0314, 1.0),
+            0.05,
+        );
+        let driver = CarDriver::new(car);
+        w.add_system(driver);
+
+        cars.push(car);
+    }
+
     let mut rng = rand::thread_rng();
     let distr = Uniform::new(0.0, 1.0);
     for j in [-5.4, -2.2, 2.2, 5.4].iter() {
@@ -83,9 +111,8 @@ fn main() {
                     + Vec2::new(-0.77907276, 0.6269335) * (*j * 1.5 - 1.0)
                     - Vec2::new(0.6269335, 0.77907276) * 9.0 * *i,
             );
-            let car;
             if *i != 2 || *j != 2.2 || follow_ai {
-                car = carsys.create_car(
+                let car = carsys.create_car(
                     w.as_static_mut(),
                     state,
                     Vec4::new(
@@ -98,24 +125,20 @@ fn main() {
                 );
                 let driver = AiDriver::new(car, j / 2.0).expect("Failed to read path!");
                 w.add_system(driver);
-            } else {
-                car = carsys.create_car(
-                    w.as_static_mut(),
-                    state,
-                    Vec4::new(0.5333, 0.2014, 0.0314, 1.0),
-                    0.05,
-                );
-                let driver = CarDriver::new(car);
-                w.add_system(driver);
-            }
-
-            if *i == 2 && *j == 2.2 {
-                let follower = CamFollowCar::new(car, camera_entity, false, w.as_static_mut());
-                w.add_system(follower);
-                w.add_gui(Gui::from_car(car));
+                cars.push(car);
             }
         }
     }
+
+    let sounds = Sounds::new(cars.clone(), camera_entity, muted);
+    w.add_system(sounds);
+
+    let marks = WheelMark::new(cars.clone(), w.as_static_mut());
+    w.add_system(marks);
+
+    w.add_gui(Gui::from_car(cars[0]));
+    let follower = CamFollowCar::new(cars, camera_entity, false, w.as_static_mut());
+    w.add_system(follower);
 
     let sky = Sky::new(sun_dir, &mut w);
 

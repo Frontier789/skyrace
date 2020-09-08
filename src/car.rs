@@ -5,10 +5,12 @@ use self::assimp::{aiImportFileToMesh, aiImportFileToMeshes};
 #[allow(deprecated)]
 use self::rand::distributions::{Distribution, Normal};
 // use crate::line_system::{DelLine, LineDesc, LineSystem, LinesUpdate, SetLine};
-use glui::graphics::{DrawShaderSelector, RenderSequence};
-use glui::mecs::{Component, DrawComponent, Entity, StaticWorld, System};
+use glui::graphics::{DrawShaderSelector, RenderCommand, RenderSequence};
+use glui::mecs::{BodyComponent, Component, DrawComponent, Entity, StaticWorld, System};
 use glui::tools::mesh::{Mesh, MeshOnGPU};
-use glui::tools::{Mat4, Uniform, Vec2, Vec3, Vec4};
+use glui::tools::{
+    Buffer, DrawMode, Mat4, Rect, RgbaTexture, Uniform, Vec2, Vec3, Vec4, VertexArray,
+};
 use std::f32::consts::PI;
 use std::time::Duration;
 
@@ -19,6 +21,7 @@ struct CarBody {
 pub struct CarSystem {
     body_mesh: CarBody,
     wheel_mesh: MeshOnGPU,
+    shadow: RgbaTexture,
 }
 
 impl System for CarSystem {
@@ -253,13 +256,33 @@ impl System for CarSystem {
                 let car_pitch =
                     (car.front_susp.length - car.rear_susp.length).atan2(car.config.wheel_base());
 
+                let ori_scale =
+                    Mat4::rotate_y(-car.heading) * Mat4::scale3(car.config.body_size() / 2.0);
+
+                let ori_scale_bob = Mat4::rotate_y(-car.heading)
+                    * Mat4::rotate_z(car_pitch)
+                    * Mat4::scale3(car.config.body_size() / 2.0);
+
                 let body_draw = world.component_mut::<DrawComponent>(body_entity).unwrap();
 
                 body_draw.model_matrix = Mat4::offset(car.pos3() + Vec3::new(0.0, car_h, 0.0))
-                    * Mat4::rotate_y(-car.heading)
-                    * Mat4::rotate_z(car_pitch)
-                    * Mat4::scale3(car.config.body_size() / 2.0)
+                    * ori_scale_bob
                     * Mat4::offset(Vec3::new(0.0, 1.0, 0.0));
+
+                let mut light_dir = Vec3::zero();
+
+                if let Uniform::Vector3(_, dir) = body_draw.render_seq.command(0).uniforms[0] {
+                    light_dir = dir * Vec3::new(1.0, 0.0, 1.0);
+                }
+
+                let shadow_draw = world.component_mut::<DrawComponent>(car.shadow).unwrap();
+
+                let depth = 0.02 + i as f32 * 0.0035;
+                let center = car.pos3() + Vec3::new(0.0, depth, 0.0);
+                shadow_draw.model_matrix = Mat4::offset(center - light_dir * 0.1) * ori_scale;
+
+                let shadow_body = world.component_mut::<BodyComponent>(car.shadow).unwrap();
+                shadow_body.center.z = -(i as f32);
 
                 let wheel_dist = car.config.body_size().z / 2.0 - car.config.wheel_width;
 
@@ -333,6 +356,7 @@ impl CarSystem {
         CarSystem {
             body_mesh: Self::load_body(),
             wheel_mesh: Self::load_wheel(),
+            shadow: RgbaTexture::from_file("images/shadow.png").unwrap_or(RgbaTexture::unit()),
         }
     }
 
@@ -413,6 +437,38 @@ impl CarSystem {
             ];
             rs.add_command(self.body_mesh.meshes[i].as_render_command(shader.clone(), uniforms));
         }
+
+        rs
+    }
+
+    fn shadow_rs(&self) -> RenderSequence {
+        let pts = Rect::from_min_max(Vec2::new(-2.0, -2.0), Vec2::new(2.0, 2.0)).triangulate_3d();
+        let pts = pts.into_iter().map(|p| p.xzy()).collect::<Vec<Vec3>>();
+        let pbuf = Buffer::from_vec(&pts);
+        let cbuf = Buffer::from_vec(&vec![Vec4::WHITE; 6]);
+        let tbuf = Buffer::from_vec(&Rect::unit().triangulate());
+
+        let mut vao = VertexArray::new();
+        vao.attrib_buffer(0, &pbuf);
+        vao.attrib_buffer(1, &cbuf);
+        vao.attrib_buffer(2, &tbuf);
+
+        let mut rs = RenderSequence::new();
+
+        rs.add_buffer(pbuf.into_base_type());
+        rs.add_buffer(cbuf.into_base_type());
+        rs.add_buffer(tbuf.into_base_type());
+
+        rs.add_command(RenderCommand {
+            vao,
+            mode: DrawMode::Triangles,
+            shader: DrawShaderSelector::Textured,
+            uniforms: vec![Uniform::from("tex", &self.shadow)],
+            transparent: true,
+            instances: 1,
+            wireframe: false,
+        });
+
         rs
     }
 
@@ -434,7 +490,21 @@ impl CarSystem {
             self.create_wheel(world),
             self.create_wheel(world),
         ];
-        world.add_component(e, CarComponent::new_stiff(wheels, init_state, randomness));
+        let shadow_entity = world.entity();
+        world.add_component(
+            shadow_entity,
+            DrawComponent::from_render_seq(self.shadow_rs()),
+        );
+        world.add_component(
+            shadow_entity,
+            BodyComponent {
+                center: Default::default(),
+            },
+        );
+        world.add_component(
+            e,
+            CarComponent::new_stiff(wheels, shadow_entity, init_state, randomness),
+        );
         e
     }
 }
@@ -527,10 +597,16 @@ pub struct CarComponent {
     pub rear_susp: Suspension,
     pub front_susp: Suspension,
     pub wheels: [Entity; 4],
+    pub shadow: Entity,
 }
 
 impl CarComponent {
-    fn new_stiff(wheels: [Entity; 4], init_state: (f32, Vec2), randomness: f32) -> Self {
+    fn new_stiff(
+        wheels: [Entity; 4],
+        shadow: Entity,
+        init_state: (f32, Vec2),
+        randomness: f32,
+    ) -> Self {
         let mut rng = rand::thread_rng();
         let mut rngs = rand::thread_rng();
         let normal = Normal::new(1.0, randomness as f64);
@@ -577,6 +653,7 @@ impl CarComponent {
             rear_susp: Suspension::new(0.05, 2200.0, 34000.0),
             wheels,
             wheel_roll: 0.0,
+            shadow,
         }
     }
 

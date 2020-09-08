@@ -51,10 +51,10 @@ vec3 lin2srgb(vec3 c) { return sqrt(c); }
 
 void main() {
     vec3 ray_dir = normalize(ray_direction);
-    if (ray_dir.y < 0) {
-        clr = vec4(0,0,0,1);
-        return;
-    }
+//    if (ray_dir.y < 0) {
+//        clr = vec4(0,0,0,1);
+//        return;
+//    }
     
     float camera_ray_angle_cos = dot(ray_dir, camera_position) / camera_height;
     float camera_ray_depth = optical_depth(camera_ray_angle_cos, camera_height);

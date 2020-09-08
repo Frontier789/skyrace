@@ -1,8 +1,7 @@
 use assimp::aiImportFileToMesh;
 use glui::mecs::{DrawComponent, Entity, StaticWorld, System};
 use glui::tools::mesh::Mesh;
-use glui::tools::Uniform;
-use glui::tools::{DrawShader, FloatTexture, Mat4, RgbaTexture, Vec2, Vec3, Vec4};
+use glui::tools::{DrawShader, FloatTexture, Mat4, RgbaTexture, Uniform, Vec2, Vec3, Vec4};
 use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use std::f32::consts::PI;
@@ -11,6 +10,7 @@ use std::f32::consts::PI;
 pub struct Cacti {
     draws: Vec<Entity>,
     tex: RgbaTexture,
+    shader: DrawShader,
 }
 
 impl System for Cacti {}
@@ -42,7 +42,10 @@ impl Cacti {
         let mut rng: XorShiftRng = SeedableRng::from_seed(seed);
         let mut unit_rand = || rng.gen_range(0.0, 1.0);
 
-        let n = 1000;
+        let n = 500;
+
+        let shader = DrawShader::from_files("shaders/cactus.vert", "shaders/cactus.frag")
+            .expect("Failed to load cactus shaders!");
 
         let mut draws = Vec::with_capacity(n);
         for _ in 0..n {
@@ -56,9 +59,7 @@ impl Cacti {
                 &cactus03
             };
             let rs = cactus.non_owning_render_seq(
-                DrawShader::from_files("shaders/cactus.vert", "shaders/cactus.frag")
-                    .expect("Failed to load cactus shaders!")
-                    .into(),
+                shader.clone().into(),
                 vec![
                     Uniform::from("diffuse_tex", &tex),
                     Uniform::from("light_direction", Vec3::new(1.0, 0.0, 0.0)),
@@ -72,6 +73,6 @@ impl Cacti {
             draws.push(world.new_entity_with_component(comp));
         }
 
-        Cacti { draws, tex }
+        Cacti { draws, tex, shader }
     }
 }
