@@ -1,9 +1,9 @@
 extern crate assimp;
-extern crate rand;
+extern crate rand_distr;
 
 use self::assimp::{aiImportFileToMesh, aiImportFileToMeshes};
 #[allow(deprecated)]
-use self::rand::distributions::{Distribution, Normal};
+use self::rand_distr::{Distribution, Normal};
 // use crate::line_system::{DelLine, LineDesc, LineSystem, LinesUpdate, SetLine};
 use glui::graphics::{DrawShaderSelector, RenderCommand, RenderSequence};
 use glui::mecs::{BodyComponent, Component, DrawComponent, Entity, StaticWorld, System};
@@ -609,8 +609,8 @@ impl CarComponent {
     ) -> Self {
         let mut rng = rand::thread_rng();
         let mut rngs = rand::thread_rng();
-        let normal = Normal::new(1.0, randomness as f64);
-        let normals = Normal::new(1.0, randomness as f64 * 0.1);
+        let normal = Normal::new(1.0, randomness as f64).unwrap();
+        let normals = Normal::new(1.0, randomness as f64 * 0.1).unwrap();
         let mut rnd = || normal.sample(&mut rng) as f32;
         let mut rnds = || normals.sample(&mut rngs) as f32;
         let scale = 1.4 * rnds();

@@ -7,9 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-glui = { path = "../glui", features = ["serializable"] }
-glui_proc = { path = "../glui_proc" }
-assimp = { path = "../assimp" }
+glui = { git = "https://github.com/Frontier789/glui", features = ["serializable"] }
+glui_proc = { git = "https://github.com/Frontier789/glui_proc" }
+assimp = { git = "https://github.com/Frontier789/Assimp-rs" }
 serde = {version = "*", features = ["derive"]}
 serde_json = "*"
 notify = "4.0.15"

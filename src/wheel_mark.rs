@@ -10,8 +10,7 @@ pub struct WheelMark {
     pos_buf: Buffer<Vec3>,
     clr_buf: Buffer<Vec4>,
     tpt_buf: Buffer<Vec2>,
-    draw: Entity,
-    tex: RgbaTexture,
+    _tex: RgbaTexture,
     next_id: usize,
     size: usize,
 }
@@ -121,9 +120,8 @@ impl WheelMark {
             clr_buf,
             tpt_buf,
             size,
-            draw: e,
             prev_pos: vec![[Vec3::origin(); 4]; size],
-            tex,
+            _tex: tex,
         }
     }
 }
