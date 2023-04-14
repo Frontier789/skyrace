@@ -1,7 +1,5 @@
-extern crate assimp;
 extern crate rand_distr;
 
-use self::assimp::{aiImportFileToMesh, aiImportFileToMeshes};
 #[allow(deprecated)]
 use self::rand_distr::{Distribution, Normal};
 // use crate::line_system::{DelLine, LineDesc, LineSystem, LinesUpdate, SetLine};
@@ -315,7 +313,7 @@ impl System for CarSystem {
                             car.config.wheel_width,
                         ))
                         * Mat4::offset(Vec3::new(0.0, 1.0, 0.0))
-                        * Mat4::rotate_z(-car.wheel_roll);
+                        * Mat4::rotate_z(car.wheel_roll * z.signum());
                 }
             }
         }
@@ -361,15 +359,15 @@ impl CarSystem {
     }
 
     fn load_wheel() -> MeshOnGPU {
-        match aiImportFileToMesh("models/wheel_boarded.obj") {
-            Some(mesh) => mesh,
-            None => Mesh::unit_cylinder(9),
+        match Mesh::load_obj("models/wheel_boarded.obj") {
+            Ok(mesh) => mesh,
+            Err(_) => Mesh::unit_cylinder(9),
         }
         .upload_to_gpu()
     }
     fn load_body() -> CarBody {
-        match aiImportFileToMeshes("models/body_low.obj") {
-            Some(meshes) => {
+        match Mesh::load_obj_split("models/body_low.obj") {
+            Ok(meshes) => {
                 let mut aabb = meshes[0].aabb();
                 for i in 1..meshes.len() {
                     aabb = meshes[i].extend_aabb(aabb);
@@ -381,9 +379,13 @@ impl CarSystem {
                         .collect(),
                 }
             }
-            None => CarBody {
-                meshes: vec![Mesh::unit_cube().upload_to_gpu()],
-            },
+            Err(e) => {
+                println!("Failed to load car body, using a brick lol: {:?}", e);
+
+                CarBody {
+                    meshes: vec![Mesh::unit_cube().upload_to_gpu()],
+                }
+            }
         }
     }
 
@@ -404,26 +406,15 @@ impl CarSystem {
     fn all_body_render_seq(&self, primary_color: Vec4) -> RenderSequence {
         let mut rs = RenderSequence::new();
         let shader = DrawShaderSelector::Phong;
-        let secondary_color = primary_color.yzxw();
         let colors = vec![
-            primary_color * 0.8 + secondary_color, // Vec4::new(0.0235, 0.5294, 0.4431, 1.0),
-            primary_color,                         // Vec4::new(0.0314, 0.0314, 0.5333, 1.0),
-            Vec4::new(0.6039, 0.7255, 0.8980, 1.0),
-            Vec4::WHITE - (primary_color + secondary_color) * 1.4, // Vec4::new(0.8784, 0.3373, 0.3373, 1.0),
-            Vec4::WHITE - (primary_color * 2.0 + secondary_color * 0.6), // Vec4::new(0.5529, 0.0275, 0.2275, 1.0),
-            Vec4::new(0.0000, 0.0000, 0.0000, 1.0),
-            primary_color * 0.7 + Vec4::WHITE * 0.3, // Vec4::new(0.3333, 0.1098, 0.6941, 1.0),
-            Vec4::new(0.6039, 0.8431, 0.8980, 1.0),
+            Vec4::new(0.6039, 0.6255, 0.6380, 1.0),
+            Vec4::new(0.3039, 0.3255, 0.3280, 1.0),
+            primary_color,
         ];
         let ns = vec![
             9.0,   // handle
-            300.0, // body
-            30.0,  // mirrors
-            30.0,  // brand
-            9.0,   // grid
-            9.0,   // front_lamp
-            9.0,   // back_lamp
-            50.0,  // exhaust
+            30.0,  // ?
+            30.0, // body
         ];
 
         for i in 0..self.body_mesh.meshes.len() {

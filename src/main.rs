@@ -1,5 +1,3 @@
-#![feature(clamp)]
-
 mod ai_driver;
 mod cacti;
 mod camera_on_car;
@@ -46,10 +44,10 @@ fn main() {
     let mut follow_ai = true;
     let mut muted = false;
     for arg in env::args() {
-        if arg == "-race" {
+        if arg == "race" {
             follow_ai = !follow_ai;
         }
-        if arg == "-mute" {
+        if arg == "mute" {
             muted = !muted;
         }
     }
@@ -101,6 +99,7 @@ fn main() {
         cars.push(car);
     }
 
+
     let mut rng = rand::thread_rng();
     let distr = Uniform::new(0.0, 1.0);
     for j in [-5.4, -2.2, 2.2, 5.4].iter() {
@@ -139,6 +138,8 @@ fn main() {
     w.add_gui(Gui::from_car(cars[0]));
     let follower = CamFollowCar::new(cars, camera_entity, false, w.as_static_mut());
     w.add_system(follower);
+    
+    
 
     let sky = Sky::new(sun_dir, &mut w);
 

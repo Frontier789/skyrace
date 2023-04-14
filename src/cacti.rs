@@ -1,4 +1,3 @@
-use assimp::aiImportFileToMesh;
 use glui::mecs::{DrawComponent, Entity, StaticWorld, System};
 use glui::tools::mesh::Mesh;
 use glui::tools::{DrawShader, FloatTexture, Mat4, RgbaTexture, Uniform, Vec2, Vec3, Vec4};
@@ -17,19 +16,19 @@ impl System for Cacti {}
 
 impl Cacti {
     pub fn new(world: &mut StaticWorld, height_tex: &FloatTexture) -> Cacti {
-        let cactus01 = match aiImportFileToMesh("models/cactus01.obj") {
-            Some(mesh) => mesh,
-            None => Mesh::unit_cylinder(9),
+        let cactus01 = match Mesh::load_obj("models/cactus01.obj") {
+            Ok(mesh) => mesh,
+            Err(_) => Mesh::unit_cylinder(9),
         }
         .upload_to_gpu();
-        let cactus02 = match aiImportFileToMesh("models/cactus02.obj") {
-            Some(mesh) => mesh,
-            None => Mesh::unit_cylinder(9),
+        let cactus02 = match Mesh::load_obj("models/cactus02.obj") {
+            Ok(mesh) => mesh,
+            Err(_) => Mesh::unit_cylinder(9),
         }
         .upload_to_gpu();
-        let cactus03 = match aiImportFileToMesh("models/cactus03.obj") {
-            Some(mesh) => mesh,
-            None => Mesh::unit_cylinder(9),
+        let cactus03 = match Mesh::load_obj("models/cactus03.obj") {
+            Ok(mesh) => mesh,
+            Err(_) => Mesh::unit_cylinder(9),
         }
         .upload_to_gpu();
 
@@ -40,7 +39,7 @@ impl Cacti {
             123, 111, 53, 63, 133, 101, 54, 43, 76, 4, 16, 0, 77, 91, 1, 42,
         ];
         let mut rng: XorShiftRng = SeedableRng::from_seed(seed);
-        let mut unit_rand = || rng.gen_range(0.0, 1.0);
+        let mut unit_rand = || rng.gen_range(0.0..=1.0);
 
         let n = 500;
 
@@ -58,7 +57,7 @@ impl Cacti {
             } else {
                 &cactus03
             };
-            let rs = cactus.non_owning_render_seq(
+            let rs = cactus01.non_owning_render_seq(
                 shader.clone().into(),
                 vec![
                     Uniform::from("diffuse_tex", &tex),

@@ -6,7 +6,7 @@ use glui::tools::{
 };
 
 use crate::utilities::watch;
-use noise::{NoiseFn, OpenSimplex, Seedable};
+use noise::{NoiseFn, OpenSimplex};
 use notify::DebouncedEvent::NoticeWrite;
 use notify::{DebouncedEvent, RecommendedWatcher};
 use std::sync::mpsc::Receiver;
@@ -19,7 +19,7 @@ struct HmapSampler {
 impl HmapSampler {
     pub fn new() -> HmapSampler {
         HmapSampler {
-            gen: OpenSimplex::new().set_seed(42),
+            gen: OpenSimplex::new(42),
         }
     }
     const SCALE: f32 = 10.0;
