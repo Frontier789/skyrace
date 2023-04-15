@@ -160,8 +160,16 @@ impl Sounds {
                         SoundMsg::PlayMusic(play) => {
                             if play {
                                 music_sink.play();
+                                for engine in engines.iter_mut() {
+                                    engine.1.play();
+                                }
+                                wind_sink.play();
                             } else {
                                 music_sink.pause();
+                                for engine in engines.iter_mut() {
+                                    engine.1.pause();
+                                }
+                                wind_sink.pause();
                             }
                         }
                     },
