@@ -57,7 +57,7 @@ impl Cacti {
             } else {
                 &cactus03
             };
-            let rs = cactus01.non_owning_render_seq(
+            let rs = cactus.non_owning_render_seq(
                 shader.clone().into(),
                 vec![
                     Uniform::from("diffuse_tex", &tex),
